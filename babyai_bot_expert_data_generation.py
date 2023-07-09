@@ -1,9 +1,6 @@
 #!/usr/bin/env python3
 
 """
-Evaluate the success rate of the bot
-This script is used for testing/debugging purposes
-
 Examples of usage:
 - Run the bot on the GoTo level 10 times (seeds 9 to 18)
 eval_bot.py --level GoTo --num_runs 10 --seed 9
@@ -14,6 +11,7 @@ eval_bot.py --advise_mode --num_runs 100
 eval_boy.py --advise_mode --bad_action_proba .8 --non_optimal_steps 10 --random_agent_seed 9
 
 """
+import collections
 import h5py
 import numpy as np
 import random
@@ -127,6 +125,10 @@ for level_name in level_list:
         try:
             episode_steps = 0
             last_action = None
+
+            episode_dict = collections.defaultdict(list)
+            rewards = []
+            observations = []
             while True:
                 action = expert.replan(last_action)
                 if options.advise_mode and episode_steps < non_optimal_steps:
@@ -149,6 +151,10 @@ for level_name in level_list:
                     optimal_actions.append(action)
 
                 obs, reward, done, info = mission.step(action)
+                # record 
+                rewards.append(reward)
+                observations.append(obs)
+
                 last_action = action
 
                 total_reward += reward
@@ -163,10 +169,20 @@ for level_name in level_list:
                         total_steps.append(episode_steps)
                         if options.verbose:
                             print('SUCCESS on seed {}, reward {:.2f}'.format(mission_seed, reward))
+                        episode_termination = np.zeros(episode_steps)
+                        episode_termination[-1] = 1
                     if reward <= 0:
                         assert episode_steps == mission.max_steps  # Is there another reason for this to happen ?
                         if options.verbose:
                             print('FAILURE on %s, seed %d, reward %.2f' % (level_name, mission_seed, reward))
+                        
+                    episode = {
+                        "observations": np.array([serialized_state] + [None] * len(actions)),  
+                        "actions": np.array(actions),
+                        "rewards": np.array(rewards),
+                        "terminations": episode_termination,  
+                        "truncations": np.zeros(len(actions))  # Replace zeros with appropriate truncation values if available
+                    }
                     break
         except Exception as e:
             print('FAILURE on %s, seed %d' % (level_name, mission_seed))
